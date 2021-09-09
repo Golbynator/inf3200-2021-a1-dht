@@ -6,13 +6,30 @@ import signal
 import socket
 import socketserver
 import threading
+import http.client
 
 from http.server import BaseHTTPRequestHandler,HTTPServer
+from utility import get_chord_index, get_ipaddr, contained
 
+#Change the modulo dynamically later!
+# get_chord_index(socket.gethostname(), 512)
+CHORD_INDEX = 80
+print(CHORD_INDEX)
+SUCCESSOR = None
+PREDECESSOR = None
 
 object_store = {}
 neighbors = []
 
+
+
+def find_successor(index):
+    if contained(PREDECESSOR[1], CHORD_INDEX, index):
+        return CHORD_INDEX
+    else:
+        return SUCCESSOR[1]
+
+         
 class NodeHttpHandler(BaseHTTPRequestHandler):
 
     def send_whole_response(self, code, content, content_type="text/plain"):
@@ -47,10 +64,31 @@ class NodeHttpHandler(BaseHTTPRequestHandler):
         key = self.extract_key_from_path(self.path)
         value = self.rfile.read(content_length)
 
-        object_store[key] = value
+        print(f"This is the index:{get_chord_index(key, 512)} of the key:{key}")
+        print(find_successor(get_chord_index(key, 512)))
 
-        # Send OK response
-        self.send_whole_response(200, "Value stored for " + key)
+        key_index = get_chord_index(key, 512)
+        key_successor = find_successor(key_index)
+
+        if key_successor == CHORD_INDEX:
+            object_store[key] = value
+        else:
+            #Do a request
+            if CHORD_INDEX == 80:
+                print("hiohiojoi")
+                exit()
+            print(SUCCESSOR[0])
+            conn = http.client.HTTPConnection("localhost:8002")
+            conn.request("PUT", "/storage/"+key, value)
+            resp = conn.getresponse()
+            print(resp.status)
+
+        #Send OK response
+        print("er her")
+        self.send_whole_response(200, "Value stored for " + key)    
+
+            
+
 
     def do_GET(self):
         if self.path.startswith("/storage"):
@@ -93,8 +131,15 @@ class ThreadingHttpServer(HTTPServer, socketserver.ThreadingMixIn):
 def run_server(args):
     global server
     global neighbors
+    global SUCCESSOR
+    global PREDECESSOR
     server = ThreadingHttpServer(('', args.port), NodeHttpHandler)
     neighbors = args.neighbors
+    #Maybe get Chord index of neighbors
+    #Remember to node hash port number. Maybe need change setup.py to hash node + port
+    PREDECESSOR = (neighbors[0], get_chord_index(neighbors[0].split(":")[0], 512))
+    SUCCESSOR = (neighbors[1], get_chord_index(neighbors[1].split(":")[0], 512))
+    print(PREDECESSOR, SUCCESSOR)
 
     def server_main():
         print("Starting server on port {}. Neighbors: {}".format(args.port, args.neighbors))
