@@ -13,7 +13,8 @@ from utility import get_chord_index, get_ipaddr, contained
 
 #Change the modulo dynamically later!
 # get_chord_index(socket.gethostname(), 512)
-CHORD_INDEX = 80
+CHORD_INDEX = get_chord_index(socket.gethostname(), 512)
+print(socket.gethostname())
 print(CHORD_INDEX)
 SUCCESSOR = None
 PREDECESSOR = None
@@ -74,12 +75,16 @@ class NodeHttpHandler(BaseHTTPRequestHandler):
             object_store[key] = value
         else:
             #Do a request
+           
             if CHORD_INDEX == 80:
                 print("hiohiojoi")
                 exit()
+           
             print(SUCCESSOR[0])
-            conn = http.client.HTTPConnection("localhost:8002")
+            
+            conn = http.client.HTTPConnection(SUCCESSOR[0])
             conn.request("PUT", "/storage/"+key, value)
+            #Do something about bad statuses
             resp = conn.getresponse()
             print(resp.status)
 
@@ -94,11 +99,25 @@ class NodeHttpHandler(BaseHTTPRequestHandler):
         if self.path.startswith("/storage"):
             key = self.extract_key_from_path(self.path)
 
-            if key in object_store:
-                self.send_whole_response(200, object_store[key])
+            key_index = get_chord_index(key, 512)
+            key_successor = find_successor(key_index)
+
+            if key_successor == CHORD_INDEX:
+                #We are the sucessor
+                if key in object_store:
+                    self.send_whole_response(200, object_store[key])
+                else:
+                    self.send_whole_response(404,
+                            "No object with key '%s' on this node" % key)
             else:
-                self.send_whole_response(404,
-                        "No object with key '%s' on this node" % key)
+                #Forward the request
+                conn = http.client.HTTPConnection(SUCCESSOR[0])
+                
+                #Do something about bad statuses
+                resp = conn.getresponse()
+                if resp.status == 200:
+                    value = resp.read()
+                    self.send_whole_response(200, value)        
 
         elif self.path.startswith("/neighbors"):
             self.send_whole_response(200, neighbors)
@@ -108,7 +127,8 @@ class NodeHttpHandler(BaseHTTPRequestHandler):
 
 def arg_parser():
     PORT_DEFAULT = 8000
-    DIE_AFTER_SECONDS_DEFAULT = 20 * 60
+    #CHAAAAAANGE THIS
+    DIE_AFTER_SECONDS_DEFAULT = 20 * 2
     parser = argparse.ArgumentParser(prog="node", description="DHT Node")
 
     parser.add_argument("-p", "--port", type=int, default=PORT_DEFAULT,
