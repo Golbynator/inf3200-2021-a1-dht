@@ -1,6 +1,5 @@
 import subprocess as sb
 import sys
-import time
 
 from random import sample, randint, choice
 from utility import get_chord_index
@@ -36,15 +35,17 @@ print(f"{chord_nodes[0][0]}:{chord_nodes[0][2]} ({chord_nodes[0][1]})")
 
 #Initialize the ditributed hash table
 #Currently running without fingertable
+#Had a problem using the "$PWD" command, so I opted to write the entire ptah instead
 if NUM_NODES == 1:
 	#sb.run(["ssh", "-f", chord_nodes[0][0], "python3", "$PWD/dummynode.py", "-p", str(randint(49152, 65535))])
 	sb.run(["python3", "dummynode.py", "-p", str(chord_nodes[0][2])])
 else:
 	for i in range(len(chord_nodes)):
 		prec = f"{chord_nodes[i-1][0]}:{chord_nodes[i-1][2]}"
-		succ = f"{chord_nodes[(i+1)%NUM_NODES][0]}:{chord_nodes[i-1][2]}"
+		succ = f"{chord_nodes[(i+1)%NUM_NODES][0]}:{chord_nodes[(i+1)%NUM_NODES][2]}"
 		sb.run(["ssh", "-f", chord_nodes[i][0], "python3", "ds1/starter_code/dummynode.py", "-p", str(chord_nodes[i][2]), prec, succ])
-		
+
+print("Done with setup!")		
 
 if DO_TESTS:	
 	node = choice(available_nodes)
@@ -54,10 +55,9 @@ if DO_TESTS:
 	connector_node = f"{chord_nodes[0][0]}:{chord_nodes[0][2]}"	
 
 	print(f"Connecting to node {node}")
-	time.sleep(1)
 	sb.run(["ssh", "-f", node, "python3", "ds1/starter_code/test.py", connector_node])
 
-print("Done with setup!")
+
     	
 
 
