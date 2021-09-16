@@ -2,14 +2,13 @@ import subprocess as sb
 import sys
 
 from random import sample, randint, choice
-from utility import get_chord_index
+from utility import get_chord_index, test_nodes, MODULO
 
 assert len(sys.argv) == 2 and sys.argv[1].isdigit() ,\
 "Wrong useage!\n Correct useage: 'python3 setup.py <num_nodes>'"
 
 DO_TESTS = True
 NUM_NODES = int(sys.argv[1])
-MODULO = 512
 
 #Get all available nodes
 #available_nodes = sb.run("/share/apps/ifi/available-nodes.sh", capture_output=True).stdout.decode()
@@ -20,6 +19,10 @@ print(f"{len(available_nodes)} available nodes\n")
 
 #Pick NUM_NODES random nodes
 org_chord_nodes = sample(available_nodes, NUM_NODES)
+
+if DO_TESTS:
+	org_chord_nodes = test_nodes
+
 print(f"We are using this/these nodes:\n{org_chord_nodes}\n")
 
 #Give the nodes an index in the chord node using hashing, and a random portnumber. Then sort it after increasing hash
@@ -35,7 +38,7 @@ print(f"{chord_nodes[0][0]}:{chord_nodes[0][2]} ({chord_nodes[0][1]})")
 
 #Initialize the ditributed hash table
 #Currently running without fingertable
-#Had a problem using the "$PWD" command, so I opted to write the entire ptah instead
+#Had a problem using the "$PWD" command, so I opted to write the entire path instead
 if NUM_NODES == 1:
 	#sb.run(["ssh", "-f", chord_nodes[0][0], "python3", "$PWD/dummynode.py", "-p", str(randint(49152, 65535))])
 	sb.run(["python3", "dummynode.py", "-p", str(chord_nodes[0][2])])

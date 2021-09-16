@@ -9,13 +9,11 @@ import threading
 import http.client
 
 from http.server import BaseHTTPRequestHandler,HTTPServer
-from utility import get_chord_index, get_ipaddr, contained
+from utility import get_chord_index, get_machine_name, contained, MODULO
 
 #Change the modulo dynamically later!
-# get_chord_index(socket.gethostname(), 512)
-CHORD_INDEX = get_chord_index(socket.gethostname(), 512)
-print(socket.gethostname())
-print(CHORD_INDEX)
+# get_chord_index(socket.gethostname(), MODULO)
+CHORD_INDEX = get_chord_index(get_machine_name(), MODULO)
 SUCCESSOR = None
 PREDECESSOR = None
 
@@ -65,31 +63,30 @@ class NodeHttpHandler(BaseHTTPRequestHandler):
         key = self.extract_key_from_path(self.path)
         value = self.rfile.read(content_length)
 
-        print(f"This is the index:{get_chord_index(key, 512)} of the key:{key}")
-        print(find_successor(get_chord_index(key, 512)))
-
-        key_index = get_chord_index(key, 512)
+        key_index = get_chord_index(key, MODULO)
         key_successor = find_successor(key_index)
+
+        print(f"I {CHORD_INDEX} got key:{key} with index:{key_index}")
+        print(f"Its Sucessor is {key_successor}\n\n")
 
         if key_successor == CHORD_INDEX:
             object_store[key] = value
         else:
             #Do a request
-           
-            if CHORD_INDEX == 80:
-                print("hiohiojoi")
-                exit()
-           
-            print(SUCCESSOR[0])
-            
             conn = http.client.HTTPConnection(SUCCESSOR[0])
             conn.request("PUT", "/storage/"+key, value)
+            
             #Do something about bad statuses
             resp = conn.getresponse()
-            print(resp.status)
+            if resp.status != 200:
+                print("Got bad status: {resp.status}")
+                send_whole_response(resp.status)
+                conn.close()
+                return
+            
+            conn.close()
 
         #Send OK response
-        print("er her")
         self.send_whole_response(200, "Value stored for " + key)    
 
             
@@ -99,7 +96,7 @@ class NodeHttpHandler(BaseHTTPRequestHandler):
         if self.path.startswith("/storage"):
             key = self.extract_key_from_path(self.path)
 
-            key_index = get_chord_index(key, 512)
+            key_index = get_chord_index(key, MODULO)
             key_successor = find_successor(key_index)
 
             if key_successor == CHORD_INDEX:
@@ -111,13 +108,19 @@ class NodeHttpHandler(BaseHTTPRequestHandler):
                             "No object with key '%s' on this node" % key)
             else:
                 #Forward the request
+                print(f"I {CHORD_INDEX} am forwarding my request to {SUCCESSOR}")
                 conn = http.client.HTTPConnection(SUCCESSOR[0])
+                conn.request("GET", "/storage/"+key)
                 
                 #Do something about bad statuses
                 resp = conn.getresponse()
                 if resp.status == 200:
                     value = resp.read()
-                    self.send_whole_response(200, value)        
+                    self.send_whole_response(200, value)
+                else:
+                    value = resp.read()
+                    self.send_whole_response(resp.status, value)     
+                conn.close()           
 
         elif self.path.startswith("/neighbors"):
             self.send_whole_response(200, neighbors)
@@ -128,7 +131,7 @@ class NodeHttpHandler(BaseHTTPRequestHandler):
 def arg_parser():
     PORT_DEFAULT = 8000
     #CHAAAAAANGE THIS
-    DIE_AFTER_SECONDS_DEFAULT = 20 * 2
+    DIE_AFTER_SECONDS_DEFAULT = 1 * 60
     parser = argparse.ArgumentParser(prog="node", description="DHT Node")
 
     parser.add_argument("-p", "--port", type=int, default=PORT_DEFAULT,
@@ -157,8 +160,8 @@ def run_server(args):
     neighbors = args.neighbors
     #Maybe get Chord index of neighbors
     #Remember to node hash port number. Maybe need change setup.py to hash node + port
-    PREDECESSOR = (neighbors[0], get_chord_index(neighbors[0].split(":")[0], 512))
-    SUCCESSOR = (neighbors[1], get_chord_index(neighbors[1].split(":")[0], 512))
+    PREDECESSOR = (neighbors[0], get_chord_index(neighbors[0].split(":")[0], MODULO))
+    SUCCESSOR = (neighbors[1], get_chord_index(neighbors[1].split(":")[0], MODULO))
     print(PREDECESSOR, SUCCESSOR)
 
     def server_main():
@@ -197,7 +200,6 @@ def run_server(args):
     print("Exited cleanly")
 
 if __name__ == "__main__":
-
     parser = arg_parser()
     args = parser.parse_args()
     run_server(args)
